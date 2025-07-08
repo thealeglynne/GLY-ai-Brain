@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from gly_ia import gly_ia
+from chaatAgentGLY import gly_ia  # <- Importación corregida
 
 app = FastAPI()
 
