@@ -5,10 +5,11 @@ import os
 
 # --- Intentar importar la función real ---
 try:
-    from chaatAgentGLY import gly_ia
+    from chaatAgentGLY.gly_ia import gly_ia  # Corregido: importar la función gly_ia desde el módulo gly_ia
     if not callable(gly_ia):
         raise AttributeError("'gly_ia' no es una función")
-except (ImportError, AttributeError):
+except (ImportError, AttributeError) as e:
+    print(f"Error al importar gly_ia: {str(e)}")  # Log para depuración
     def gly_ia(query: str, rol: str, temperatura: float, estilo: str):
         return f"Respuesta simulada para: '{query}' con rol '{rol}', temperatura {temperatura}, estilo {estilo}."
 
