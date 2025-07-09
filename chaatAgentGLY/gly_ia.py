@@ -63,7 +63,11 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", memory=None):
             verbose=False
         )
 
-        respuesta = chain.run(input=query, instrucciones=instrucciones)
+        respuesta = chain.run({
+            "input": query,
+            "instrucciones": instrucciones
+        })
+
         return respuesta, memory
 
     except groq.APIConnectionError as e:
@@ -95,6 +99,6 @@ if __name__ == "__main__":
     print("\n=== RESPUESTA DE GLY-IA ===\n")
     print(salida)
 
-    # Bonus: si quieres ver el historial acumulado
+    # Si quieres ver historial acumulado:
     # print("\n=== HISTORIAL DE CONVERSACIÓN ===\n")
     # print(mem.buffer)
