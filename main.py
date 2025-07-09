@@ -1,14 +1,18 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from chaatAgentGLY import gly_ia  # Asegúrate que esta función exista y esté importada correctamente
+from chaatAgentGLY import gly_ia
+import os
 
 app = FastAPI()
 
 # --- Configuración de CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://gly-ai-arq.vercel.app/"],  # Cambia "*" por tu dominio real en producción
+    allow_origins=[
+        "https://gly-ai-arq.vercel.app",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,7 +27,7 @@ class ConsultaInput(BaseModel):
 
 # --- Endpoint principal ---
 @app.post("/gpt")
-def procesar_consulta(data: ConsultaInput):
+async def procesar_consulta(data: ConsultaInput):
     try:
         respuesta = gly_ia(
             query=data.query,
@@ -33,8 +37,18 @@ def procesar_consulta(data: ConsultaInput):
         )
 
         # Aseguramos respuesta tipo string
-        texto_respuesta = respuesta if isinstance(respuesta, str) else respuesta.get("text", "Sin respuesta.")
+        texto_respuesta = respuesta if isinstance(respuesta, str) else str(respuesta)
         return {"respuesta": texto_respuesta}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+# --- Health Check ---
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "message": "GLY-IA API is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
