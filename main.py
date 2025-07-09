@@ -1,9 +1,18 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from chaatAgentGLY import gly_ia
 import os
 
+# --- Intentar importar la función real ---
+try:
+    from chaatAgentGLY import gly_ia
+    if not callable(gly_ia):
+        raise AttributeError("'gly_ia' no es una función")
+except (ImportError, AttributeError):
+    def gly_ia(query: str, rol: str, temperatura: float, estilo: str):
+        return f"Respuesta simulada para: '{query}' con rol '{rol}', temperatura {temperatura}, estilo {estilo}."
+
+# --- Inicializar la app ---
 app = FastAPI()
 
 # --- Configuración de CORS ---
@@ -28,6 +37,9 @@ class ConsultaInput(BaseModel):
 # --- Endpoint principal ---
 @app.post("/gpt")
 async def procesar_consulta(data: ConsultaInput):
+    if not data.query.strip():
+        raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
+
     try:
         respuesta = gly_ia(
             query=data.query,
@@ -35,19 +47,18 @@ async def procesar_consulta(data: ConsultaInput):
             temperatura=data.temperatura,
             estilo=data.estilo
         )
-
-        # Aseguramos respuesta tipo string
-        texto_respuesta = respuesta if isinstance(respuesta, str) else str(respuesta)
-        return {"respuesta": texto_respuesta}
+        return {"respuesta": str(respuesta)}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        print("ERROR INTERNO:", str(e))
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 # --- Health Check ---
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "GLY-IA API is running"}
 
+# --- Ejecutar en local ---
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
