@@ -63,12 +63,13 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", memory=None):
             verbose=False
         )
 
-        respuesta = chain.run({
+        # ✅ Cambiado a .invoke() para múltiples entradas
+        respuesta = chain.invoke({
             "input": query,
             "instrucciones": instrucciones
         })
 
-        return respuesta, memory
+        return respuesta["text"], memory
 
     except groq.APIConnectionError as e:
         return f"❌ Error de conexión con Groq: {str(e)}", memory
@@ -92,13 +93,12 @@ if __name__ == "__main__":
 
     print("\n=== GLY-IA está generando la respuesta... ===\n")
 
-    # Usamos una memoria persistente para mantener el hilo
     mem = ConversationBufferMemory(return_messages=True)
     salida, mem = gly_ia(query, rol, temperatura, estilo, memory=mem)
 
     print("\n=== RESPUESTA DE GLY-IA ===\n")
     print(salida)
 
-    # Si quieres ver historial acumulado:
+    # Opcional: ver historial acumulado
     # print("\n=== HISTORIAL DE CONVERSACIÓN ===\n")
     # print(mem.buffer)
