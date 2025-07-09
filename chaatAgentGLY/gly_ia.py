@@ -12,7 +12,6 @@ load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 print(f"GROQ_API_KEY: {'Set' if api_key else 'Not set'}")
 
-# Función para generar instrucciones del sistema según rol y estilo
 def generar_instrucciones(rol, estilo):
     estilos = {
         "Formal": "Usa un lenguaje profesional y directo.",
@@ -27,24 +26,24 @@ def generar_instrucciones(rol, estilo):
     }
     return f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')}\n{estilos.get(estilo, '')}"
 
-# Prompt con historial incluido
+# Prompt con historial incluido, ahora solo tiene una variable "input"
 prompt_template = PromptTemplate(
-    input_variables=["history", "input", "instrucciones"],
+    input_variables=["history", "input"],
     template=(
-        "{instrucciones}\n"
+        "{input}\n"
         "Historial de conversación:\n{history}\n"
         "Usuario: {input}\n"
         "IA:"
     )
 )
 
-# Lógica principal
 def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", memory=None):
     try:
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
         instrucciones = generar_instrucciones(rol, estilo)
+        entrada = f"{instrucciones}\n\n{query}"
 
         llm = ChatGroq(
             model_name="llama3-70b-8192",
@@ -63,12 +62,7 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", memory=None):
             verbose=False
         )
 
-        # ✅ Cambiado a .invoke() para múltiples entradas
-        respuesta = chain.invoke({
-            "input": query,
-            "instrucciones": instrucciones
-        })
-
+        respuesta = chain.invoke({"input": entrada})
         return respuesta["text"], memory
 
     except groq.APIConnectionError as e:
@@ -80,7 +74,7 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", memory=None):
     except Exception as e:
         return f"❌ Error inesperado: {str(e)}", memory
 
-# CLI para pruebas
+# CLI
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Uso: python gly_ia.py '{query}' '{rol}' '{temperatura}' '{estilo}'")
@@ -98,7 +92,3 @@ if __name__ == "__main__":
 
     print("\n=== RESPUESTA DE GLY-IA ===\n")
     print(salida)
-
-    # Opcional: ver historial acumulado
-    # print("\n=== HISTORIAL DE CONVERSACIÓN ===\n")
-    # print(mem.buffer)
