@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
+import requests  # Para manejar errores de red
+import groq  # Para manejar errores específicos de la API de Groq
 
 # Cargar variables del .env
 load_dotenv()
-
-# Obtener clave desde .env
 api_key = os.getenv("GROQ_API_KEY")
+print(f"GROQ_API_KEY: {'Set' if api_key else 'Not set'}")  # Log para verificar la clave
 
 # Función para generar prompt según rol y estilo
 def generar_prompt(rol, estilo, consulta):
@@ -18,14 +19,12 @@ def generar_prompt(rol, estilo, consulta):
         "Conversacional": "Habla como si fueras un colega experto, con naturalidad.",
         "Técnico": "Incluye términos técnicos y explicaciones estructuradas."
     }
-
     introducciones = {
         "Auditor": "Actúas como un auditor empresarial especializado en detectar cuellos de botella y proponer automatizaciones con IA.",
         "Desarrollador": "Eres un desarrollador senior con experiencia en arquitecturas modernas, microservicios e IA aplicada.",
         "Gestor de Negocios": "Eres un estratega empresarial que busca oportunidades de eficiencia y escalabilidad.",
         "Investigador": "Tienes la misión de recopilar datos clave y proponer estrategias fundadas en datos reales."
     }
-
     return (
         f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')} "
         f"{estilos.get(estilo, '')} "
@@ -36,6 +35,9 @@ def generar_prompt(rol, estilo, consulta):
 # Lógica principal
 def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal"):
     try:
+        if not api_key:
+            raise ValueError("GROQ_API_KEY no está configurada")
+        
         # Instanciar el modelo desde Groq
         llm = ChatGroq(
             model_name="llama3-70b-8192",
@@ -43,33 +45,32 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal"):
             temperature=float(temperatura),
             max_tokens=1200
         )
-
         prompt = generar_prompt(rol, estilo, query)
-
         prompt_template = PromptTemplate(
             input_variables=["query", "prompt"],
             template="{prompt}"
         )
-
         chain = LLMChain(llm=llm, prompt=prompt_template)
-
         respuesta = chain.invoke({"query": query, "prompt": prompt})
         return respuesta
-
+    except groq.APIConnectionError as e:
+        return f"❌ Error de conexión con el servidor de Groq: {str(e)}"
+    except groq.RateLimitError as e:
+        return f"❌ Límite de la API alcanzado: {str(e)}"
+    except groq.AuthenticationError as e:
+        return f"❌ Error de autenticación: Clave de API inválida - {str(e)}"
     except Exception as e:
-        return f"❌ Error al procesar la consulta: {str(e)}"
+        return f"❌ Error inesperado al procesar la consulta: {str(e)}"
 
 # CLI
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Uso: python gly_ia.py '{query}' '{rol}' '{temperatura}' '{estilo}'")
         sys.exit(1)
-
     query = sys.argv[1]
     rol = sys.argv[2] if len(sys.argv) > 2 else "Auditor"
     temperatura = sys.argv[3] if len(sys.argv) > 3 else 0.7
     estilo = sys.argv[4] if len(sys.argv) > 4 else "Formal"
-
     print("\n=== GLY-IA está generando la respuesta... ===\n")
     salida = gly_ia(query, rol, temperatura, estilo)
     print("\n=== RESPUESTA DE GLY-IA ===\n")
