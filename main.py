@@ -6,7 +6,8 @@ import os
 # --- Importar funciones ---
 try:
     from chaatAgentGLY.gly_ia import gly_ia
-    from chaatAgentGLY.gly_dev import generar_propuesta_tecnica
+    from chaatAgentGLY.gly_dev import generar_documento_consultivo
+
 except ImportError as e:
     print("❌ Error al importar agentes:", e)
     raise
@@ -72,7 +73,8 @@ async def procesar_consulta(data: ConsultaInput):
 @app.get("/propuesta-tecnica")
 async def generar_propuesta():
     try:
-        propuesta = generar_propuesta_tecnica()
+        propuesta = generar_documento_consultivo()
+
         return {"propuesta": propuesta}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar propuesta: {str(e)}")
