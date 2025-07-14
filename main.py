@@ -3,20 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 
-# --- Intentar importar la función real ---
+# --- Importar funciones ---
 try:
-    from chaatAgentGLY.gly_ia import gly_ia  # Corregido: importar la función gly_ia desde el módulo gly_ia
-    if not callable(gly_ia):
-        raise AttributeError("'gly_ia' no es una función")
-except (ImportError, AttributeError) as e:
-    print(f"Error al importar gly_ia: {str(e)}")  # Log para depuración
-    def gly_ia(query: str, rol: str, temperatura: float, estilo: str):
-        return f"Respuesta simulada para: '{query}' con rol '{rol}', temperatura {temperatura}, estilo {estilo}."
+    from chaatAgentGLY.gly_ia import gly_ia
+    from chaatAgentGLY.gly_dev import generar_propuesta_tecnica
+except ImportError as e:
+    print("❌ Error al importar agentes:", e)
+    raise
 
-# --- Inicializar la app ---
+# --- Inicializar FastAPI ---
 app = FastAPI()
 
-# --- Configuración de CORS ---
+# --- Configurar CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -28,38 +26,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Modelo de entrada ---
+# --- Estado Global (simulación temporal para sesiones) ---
+historial_global = []
+
+# --- Entrada esperada desde el frontend ---
 class ConsultaInput(BaseModel):
     query: str
     rol: str = "Auditor"
     temperatura: float = 0.7
     estilo: str = "Formal"
 
-# --- Endpoint principal ---
+# --- Endpoint principal del agente GLY-IA ---
 @app.post("/gpt")
 async def procesar_consulta(data: ConsultaInput):
     if not data.query.strip():
         raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
 
     try:
-        respuesta = gly_ia(
-            query=data.query,
+        global historial_global
+
+        # Detectar trigger para generar propuesta técnica
+        if data.query.strip().lower() == "generar auditoria":
+            propuesta = generar_propuesta_tecnica()
+            return {
+                "respuesta": "✅ Auditoría finalizada. Propuesta técnica generada.",
+                "propuesta": propuesta
+            }
+
+        # Caso normal: continuar conversación con GLY-IA
+        respuesta, historial_global = gly_ia(
+            data.query,
             rol=data.rol,
+            estilo=data.estilo,
             temperatura=data.temperatura,
-            estilo=data.estilo
+            historial=historial_global
         )
-        return {"respuesta": str(respuesta)}
+
+        return {"respuesta": respuesta}
 
     except Exception as e:
-        print("ERROR INTERNO:", str(e))
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        print("❌ Error interno:", str(e))
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-# --- Health Check ---
+# --- Endpoint adicional para generar propuesta manual ---
+@app.get("/propuesta-tecnica")
+async def generar_propuesta():
+    try:
+        propuesta = generar_propuesta_tecnica()
+        return {"propuesta": propuesta}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar propuesta: {str(e)}")
+
+# --- Endpoint de salud ---
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "GLY-IA API is running"}
 
-# --- Ejecutar en local ---
+# --- Ejecución local ---
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
