@@ -15,47 +15,42 @@ print(f"GROQ_API_KEY: {'Set' if api_key else 'Not set'}")
 # ===== Generar instrucciones por rol y estilo =====
 def generar_instrucciones(rol, estilo):
     estilos = {
-        "Formal": "Usa un lenguaje profesional y directo.",
-        "Conversacional": "Habla como si fueras un colega experto, con naturalidad.",
-        "Técnico": "Incluye términos técnicos y explicaciones estructuradas."
+        "Formal": "Usa un lenguaje profesional, claro y directo.",
+        "Conversacional": "Habla como un colega experto, con naturalidad, amabilidad y claridad, como si conversaras en persona.",
+        "Técnico": "Usa términos técnicos y explicaciones estructuradas, manteniendo claridad."
     }
 
     introducciones = {
         "Auditor": (
-            "Actúas como un auditor empresarial y arquitecto de software especializado en detectar cuellos de botella, "
-            "diseñar ciudades digitales y proponer arquitecturas escalables donde la inteligencia artificial no solo "
-            "automatiza, sino habita y transforma. Consideras los procesos como avenidas por donde fluyen datos, "
-            "y los modelos de IA como entidades inteligentes que trabajan dentro de servicios modulares, microservicios "
-            "y capas de orquestación. Tu enfoque va más allá de chatbots: propones sistemas vivos que se acoplan de forma "
-            "nativa a los flujos de trabajo, impulsados por IA y diseñados para evolucionar con la empresa."
+            "Eres GLY-IA, un consultor experto en auditorías empresariales y transformación digital. Tu misión es recolectar información clave sobre los procesos, herramientas y desafíos del usuario para preparar una auditoría técnica. Haz preguntas específicas, una por respuesta, para entender su negocio y detectar ineficiencias. Mantén las respuestas breves (80-120 palabras), naturales y basadas en el contexto, evitando explicaciones largas o repeticiones. Propón escribir 'generar auditoria' cuando tengas suficiente información (por ejemplo, tras 3-4 interacciones relevantes). Tu objetivo es guiar al usuario hacia una auditoría sin abrumarlo, proponiendo soluciones basadas en IA solo cuando sea necesario."
         ),
         "Desarrollador": "Eres un desarrollador senior con experiencia en arquitecturas modernas, microservicios e IA aplicada.",
         "Gestor de Negocios": "Eres un estratega empresarial que busca oportunidades de eficiencia y escalabilidad.",
-        "Investigador": "Tienes la misión de recopilar datos clave y proponer estrategias fundadas en datos reales."
+        "Investigador": "Tienes la misión de recopilar datos clave y proponer estrategias basadas en datos reales."
     }
 
     return f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')}\n{estilos.get(estilo, '')}"
 
 # ===== Construcción de historial para el prompt =====
-def construir_contexto(historial, max_turnos=3):
+def construir_contexto(historial, max_turnos=5):
     if len(historial) > max_turnos:
         historial = historial[-max_turnos:]
     contexto = "\n".join([
         f"Usuario: {turno['user']}\nIA: {turno['ia']}" for turno in historial
+        if turno['user'].lower() != "iniciar conversación"
     ])
     return contexto
 
 # ===== Evaluar si ya se puede generar auditoría =====
 def evaluar_completitud(historial):
     criterios = [
-        "automatización", "proceso", "departamento", "herramienta",
-        "problema", "flujo", "ineficiencia"
+        "proceso", "herramienta", "problema", "ineficiencia", "flujo"
     ]
     texto_completo = " ".join([turno["user"].lower() for turno in historial])
-    return all(criterio in texto_completo for criterio in criterios) or len(historial) >= 6
+    return sum(criterio in texto_completo for criterio in criterios) >= 2 and len(historial) >= 3
 
 # ===== Guardar conversación en JSON =====
-def guardar_conversacion_json(historial, empresa="Desconocida", rol="Auditor", estilo="Formal"):
+def guardar_conversacion_json(historial, empresa="Desconocida", rol="Auditor", estilo="Conversacional"):
     data = {
         "empresa": empresa,
         "rol": rol,
@@ -73,20 +68,30 @@ prompt_template = PromptTemplate(
     input_variables=["instrucciones", "contexto", "input"],
     template=(
         "{instrucciones}\n\n"
-        "Contexto reciente:\n{contexto}\n\n"
-        "Nueva entrada del usuario: {input}\n"
-        "IA:"
+        "Contexto reciente de la conversación:\n{contexto}\n\n"
+        "Nueva pregunta del usuario: {input}\n\n"
+        "Responde de forma breve (80-120 palabras), clara y natural, como si hablaras con un colega. Usa el contexto para continuar la conversación de forma lógica, sin repetir ideas. Haz una sola pregunta clave para recolectar información sobre procesos, herramientas o desafíos. Evita explicaciones largas o sugerencias prematuras de soluciones. Si el contexto es suficiente, sugiere escribir 'generar auditoria' de forma breve. No repitas la pregunta del usuario en la respuesta.\n\n"
+        "Respuesta de GLY-IA:"
     )
 )
 
 # ===== Llamada principal del agente =====
-def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", historial=None):
+def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", historial=None):
     try:
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
         if historial is None:
             historial = []
+
+        # Manejar el query inicial
+        if query.lower() == "iniciar conversación":
+            respuesta = (
+                "¡Hola! Soy GLY-IA, tu asistente para auditar procesos con IA. 😊 Quiero entender tu negocio. ¿A qué se dedica tu empresa?"
+            )
+            historial.append({"user": query, "ia": respuesta})
+            guardar_conversacion_json(historial, rol=rol, estilo=estilo)
+            return respuesta, historial
 
         instrucciones = generar_instrucciones(rol, estilo)
         contexto = construir_contexto(historial)
@@ -101,18 +106,15 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Formal", historial=Non
             model_name="llama3-70b-8192",
             api_key=api_key,
             temperature=float(temperatura),
-            max_tokens=1000
+            max_tokens=150  # Reducido para respuestas más cortas
         )
 
         respuesta = llm.invoke(prompt)
         texto = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
 
-        # === Agregar sugerencia a partir del séptimo mensaje ===
-        if len(historial) >= 6 and "generar auditoria" not in query.lower():
-            texto += (
-                "\n\n🧠 Parece que ya tenemos un contexto muy completo. "
-                "Cuando estés listo, escribe **'generar auditoria'** para que pueda producir el informe técnico consultivo."
-            )
+        # === Agregar sugerencia de auditoría si el contexto es suficiente ===
+        if evaluar_completitud(historial) and "generar auditoria" not in query.lower():
+            texto += "\n\nParece que tenemos suficiente info. ¿Listo para el informe técnico? Escribe 'generar auditoria'."
 
         historial.append({"user": query, "ia": texto})
 
@@ -139,7 +141,7 @@ if __name__ == "__main__":
     query = sys.argv[1]
     rol = sys.argv[2] if len(sys.argv) > 2 else "Auditor"
     temperatura = sys.argv[3] if len(sys.argv) > 3 else 0.7
-    estilo = sys.argv[4] if len(sys.argv) > 4 else "Formal"
+    estilo = sys.argv[4] if len(sys.argv) > 4 else "Conversacional"
 
     print("\n=== GLY-IA está generando la respuesta... ===\n")
 

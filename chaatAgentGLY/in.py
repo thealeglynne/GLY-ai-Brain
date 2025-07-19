@@ -1,9 +1,9 @@
 from gly_ia import gly_ia
-from gly_dev import generar_propuesta_tecnica
+from gly_dev import generar_documento_consultivo  # Corrected import
 
 historial = []
 rol = "Auditor"
-estilo = "Formal"
+estilo = "Conversacional"  # Changed to Conversacional for human-like tone
 temperatura = 0.7
 
 print("💬 Bienvenido a GLY-IA (interactivo). Escribe 'salir' para terminar.\n")
@@ -14,7 +14,7 @@ while True:
         print("👋 Saliendo. La conversación se ha guardado en 'conversacion_gly_ia.json'")
         
         print("\n🛠️ Generando propuesta técnica basada en esta conversación...\n")
-        propuesta = generar_propuesta_tecnica()
+        propuesta = generar_documento_consultivo(historial)  # Pass historial
 
         # Guardar propuesta en archivo
         with open("propuesta_tecnica_glynne.txt", "w", encoding="utf-8") as f:
