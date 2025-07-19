@@ -2,14 +2,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Importar funciones ---
 try:
     from chaatAgentGLY.gly_ia import gly_ia
     from chaatAgentGLY.gly_dev import generar_documento_consultivo
-
 except ImportError as e:
-    print("❌ Error al importar agentes:", e)
+    logger.error(f"Error al importar agentes: {e}")
     raise
 
 # --- Inicializar FastAPI ---
@@ -48,7 +52,9 @@ async def procesar_consulta(data: ConsultaInput):
 
         # Detectar trigger para generar propuesta técnica
         if data.query.strip().lower() == "generar auditoria":
-            propuesta = generar_propuesta_tecnica()
+            logger.info("Generando auditoría...")
+            propuesta = generar_documento_consultivo()  # Corregido: usar generar_documento_consultivo
+            logger.info("Auditoría generada exitosamente")
             return {
                 "respuesta": "✅ Auditoría finalizada. Propuesta técnica generada.",
                 "propuesta": propuesta
@@ -66,7 +72,7 @@ async def procesar_consulta(data: ConsultaInput):
         return {"respuesta": respuesta}
 
     except Exception as e:
-        print("❌ Error interno:", str(e))
+        logger.error(f"Error interno en /gpt: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 # --- Endpoint adicional para generar propuesta manual ---
@@ -74,9 +80,9 @@ async def procesar_consulta(data: ConsultaInput):
 async def generar_propuesta():
     try:
         propuesta = generar_documento_consultivo()
-
         return {"propuesta": propuesta}
     except Exception as e:
+        logger.error(f"Error al generar propuesta: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al generar propuesta: {str(e)}")
 
 # --- Endpoint de salud ---
