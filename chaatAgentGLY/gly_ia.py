@@ -68,7 +68,7 @@ def generar_instrucciones(rol, estilo):
         ),
         "Desarrollador": "Eres un desarrollador senior con experiencia en arquitecturas modernas, microservicios e IA aplicada.",
         "Gestor de Negocios": "Eres un estratega empresarial que busca oportunidades de eficiencia y escalabilidad.",
-        "Investigador": "Tienes la misión de recopilar datos clave y proponer estrategias basadas en datos reales."
+        "Investigador": "Tienes la misión de recopilar datos Clave y proponer estrategias basadas en datos reales."
     }
 
     return f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')}\n{estilos.get(estilo, '')}"
