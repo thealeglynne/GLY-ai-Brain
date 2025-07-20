@@ -1,97 +1,80 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
-import logging
+from typing import Optional
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# --- Importar funciones ---
-try:
-    from chaatAgentGLY.gly_ia import gly_ia
-    from chaatAgentGLY.gly_dev import generar_documento_consultivo
-except ImportError as e:
-    logger.error(f"Error al importar agentes: {e}")
-    raise
-
-# --- Inicializar FastAPI ---
+# --- Configuración inicial ---
 app = FastAPI()
 
-# --- Configurar CORS ---
+# CORS más permisivo para desarrollo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://gly-ai-arq.vercel.app",
-        "http://localhost:3000"
-    ],
+    allow_origins=["*"],  # En producción, reemplazar con tus dominios específicos
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- Entrada esperada desde el frontend ---
+# --- Modelos Pydantic ---
 class ConsultaInput(BaseModel):
     query: str
-    user_id: str  # ¡Este campo es obligatorio ahora!
-    rol: str = "Auditor"
-    temperatura: float = 0.7
-    estilo: str = "Formal"
+    rol: Optional[str] = "Auditor"
+    temperatura: Optional[float] = 0.7
+    estilo: Optional[str] = "Formal"
 
-# --- Endpoint principal del agente GLY-IA ---
+# --- Estado Global ---
+historial_global = []
+
+# --- Endpoints ---
 @app.post("/gpt")
-async def procesar_consulta(data: ConsultaInput):
+async def procesar_consulta(data: ConsultaInput, request: Request):
     try:
+        # Debug: Verificar los datos recibidos
+        print(f"Datos recibidos: {await request.json()}")
+        
         if not data.query.strip():
             raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
 
-        if not data.user_id.strip():
-            raise HTTPException(status_code=400, detail="El campo 'user_id' es obligatorio.")
+        global historial_global
 
-        # Detectar trigger para generar propuesta técnica
+        # Manejar el caso de generar auditoría
         if data.query.strip().lower() == "generar auditoria":
-            logger.info(f"Generando auditoría para usuario {data.user_id}...")
-            propuesta = generar_documento_consultivo(data.user_id)
-            logger.info("Auditoría generada exitosamente")
+            propuesta = generar_propuesta_tecnica()
             return {
-                "respuesta": "Auditoría finalizada. Propuesta técnica generada.",
+                "respuesta": "✅ Auditoría finalizada. Propuesta técnica generada.",
                 "propuesta": propuesta
             }
 
-        # Caso normal: continuar conversación con GLY-IA
-        respuesta, _ = await gly_ia(
-            query=data.query,
-            user_id=data.user_id,
+        # Procesar con GLY-IA
+        respuesta, historial_global = gly_ia(
+            data.query,
             rol=data.rol,
             estilo=data.estilo,
-            temperatura=data.temperatura
+            temperatura=data.temperatura,
+            historial=historial_global
         )
 
         return {"respuesta": respuesta}
 
     except Exception as e:
-        logger.error(f"Error interno en /gpt: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        print(f"Error en /gpt: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# --- Endpoint adicional para generar propuesta técnica manual ---
-@app.get("/propuesta-tecnica/{user_id}")
-async def generar_propuesta(user_id: str):
+# --- Endpoints adicionales ---
+@app.get("/propuesta-tecnica")
+async def generar_propuesta():
     try:
-        if not user_id.strip():
-            raise HTTPException(status_code=400, detail="El campo 'user_id' es obligatorio.")
-        propuesta = generar_documento_consultivo(user_id)
+        propuesta = generar_documento_consultivo()
         return {"propuesta": propuesta}
     except Exception as e:
-        logger.error(f"Error al generar propuesta: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al generar propuesta: {str(e)}")
 
-# --- Endpoint de salud ---
-@app.get("/")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "GLY-IA API is running"}
 
-# --- Ejecución local ---
+# --- Ejecución ---
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
