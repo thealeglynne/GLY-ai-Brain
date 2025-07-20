@@ -11,26 +11,14 @@ import groq
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "https://zixyjbmaczqsitxubcbp.supabase.co")
-supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppeHlqYm1hY3pxc2l0eHViY2JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5NTIwNjEsImV4cCI6MjA2NjUyODA2MX0.u4NXFIyuxcCtgN925VfQwYgaPNzdNzfwMkrUkj0CyfI")
+supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
 
 print(f"GROQ_API_KEY: {'Set' if api_key else 'Not set'}")
 print(f"Supabase URL: {supabase_url}")
 
 # ===== Inicializar cliente de Supabase =====
 from supabase import create_client, Client
-supabase = create_client(supabase_url, supabase_key)
-
-# ===== Obtener usuario autenticado =====
-async def get_current_user():
-    try:
-        response = await supabase.auth.get_user()
-        if response.user is None:
-            print(f"❌ Error fetching user: No user found")
-            return None
-        return response.user
-    except Exception as e:
-        print(f"❌ Unexpected error fetching user: {str(e)}")
-        return None
+supabase: Client = create_client(supabase_url, supabase_key)
 
 # ===== Recuperar auditorías previas del usuario =====
 async def get_user_audits(user_id, max_turnos=5):
@@ -44,14 +32,19 @@ async def get_user_audits(user_id, max_turnos=5):
             .execute()
         
         if response.data is None:
-            print(f"❌ Error fetching audits: No data returned")
+            print(f"❌ No se encontraron auditorías para el usuario")
             return []
         
-        # Parsear el contenido JSON de las auditorías
-        audits = [json.loads(audit['audit_content']) for audit in response.data]
+        audits = []
+        for audit in response.data:
+            try:
+                audits.append(json.loads(audit['audit_content']))
+            except Exception:
+                continue
+
         return audits
     except Exception as e:
-        print(f"❌ Unexpected error fetching audits: {str(e)}")
+        print(f"❌ Error al obtener auditorías: {str(e)}")
         return []
 
 # ===== Generar instrucciones por rol y estilo =====
@@ -68,24 +61,23 @@ def generar_instrucciones(rol, estilo):
         ),
         "Desarrollador": "Eres un desarrollador senior con experiencia en arquitecturas modernas, microservicios e IA aplicada.",
         "Gestor de Negocios": "Eres un estratega empresarial que busca oportunidades de eficiencia y escalabilidad.",
-        "Investigador": "Tienes la misión de recopilar datos Clave y proponer estrategias basadas en datos reales."
+        "Investigador": "Tienes la misión de recopilar datos clave y proponer estrategias basadas en datos reales."
     }
 
     return f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')}\n{estilos.get(estilo, '')}"
 
-# ===== Construcción de historial desde auditorías de Supabase =====
+# ===== Construcción de contexto desde auditorías =====
 async def construir_contexto(user_id, max_turnos=5):
     audits = await get_user_audits(user_id, max_turnos)
     contexto = ""
     for audit in audits:
-        # Suponemos que audit_content contiene un campo 'user_input' y 'ia_response'
         user_input = audit.get('user_input', '')
         ia_response = audit.get('ia_response', '')
         if user_input and ia_response:
             contexto += f"Usuario: {user_input}\nIA: {ia_response}\n"
     return contexto
 
-# ===== Evaluar si ya se puede generar auditoría =====
+# ===== Evaluar si se puede generar auditoría =====
 def evaluar_completitud(audits):
     criterios = ["proceso", "herramienta", "problema", "ineficiencia", "flujo"]
     texto_completo = " ".join([audit.get('user_input', '').lower() for audit in audits])
@@ -98,25 +90,25 @@ prompt_template = PromptTemplate(
         "{instrucciones}\n\n"
         "Contexto reciente de la conversación (basado en auditorías previas del usuario):\n{contexto}\n\n"
         "Nueva pregunta del usuario: {input}\n\n"
-        "Responde de forma breve (80-120 palabras), clara y natural, como si hablaras con un colega. Usa el contexto para continuar la conversación de forma lógica, sin repetir ideas. Haz una sola pregunta clave para recolectar información sobre procesos, herramientas o desafíos. Evita explicaciones largas o sugerencias prematuras de soluciones. Si el contexto es suficiente, sugiere escribir 'generar auditoria' de forma breve. No repitas la pregunta del usuario en la respuesta.\n\n"
+        "Responde de forma breve (80-120 palabras), clara y natural, como si hablaras con un colega. "
+        "Usa el contexto para continuar la conversación de forma lógica, sin repetir ideas. "
+        "Haz una sola pregunta clave para recolectar información sobre procesos, herramientas o desafíos. "
+        "Evita explicaciones largas o sugerencias prematuras de soluciones. "
+        "Si el contexto es suficiente, sugiere escribir 'generar auditoria' de forma breve. "
+        "No repitas la pregunta del usuario en la respuesta.\n\n"
         "Respuesta de GLY-IA:"
     )
 )
 
-# ===== Llamada principal del agente =====
-async def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional"):
+# ===== Función principal del agente =====
+async def gly_ia(query, user_id, rol="Auditor", temperatura=0.7, estilo="Conversacional"):
     try:
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
-        # Obtener usuario autenticado
-        user = await get_current_user()
-        if not user:
-            return "❌ Por favor, inicia sesión para continuar.", []
+        if not user_id:
+            return "❌ No se recibió un user_id válido.", []
 
-        user_id = user.id
-
-        # Obtener auditorías previas para construir contexto
         audits = await get_user_audits(user_id)
         instrucciones = generar_instrucciones(rol, estilo)
         contexto = await construir_contexto(user_id)
@@ -137,7 +129,6 @@ async def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional")
         respuesta = llm.invoke(prompt)
         texto = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
 
-        # Agregar sugerencia de auditoría si el contexto es suficiente
         if evaluar_completitud(audits) and "generar auditoria" not in query.lower():
             texto += "\n\nParece que tenemos suficiente info. ¿Listo para el informe técnico? Escribe 'generar auditoria'."
 
@@ -156,19 +147,20 @@ async def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional")
 if __name__ == "__main__":
     import asyncio
 
-    if len(sys.argv) < 2:
-        print("Uso: python gly_ia.py '{query}' '{rol}' '{temperatura}' '{estilo}'")
+    if len(sys.argv) < 3:
+        print("Uso: python gly_ia.py '{query}' '{user_id}' '{rol}' '{temperatura}' '{estilo}'")
         sys.exit(1)
 
     query = sys.argv[1]
-    rol = sys.argv[2] if len(sys.argv) > 2 else "Auditor"
-    temperatura = sys.argv[3] if len(sys.argv) > 3 else 0.7
-    estilo = sys.argv[4] if len(sys.argv) > 4 else "Conversacional"
+    user_id = sys.argv[2]
+    rol = sys.argv[3] if len(sys.argv) > 3 else "Auditor"
+    temperatura = sys.argv[4] if len(sys.argv) > 4 else 0.7
+    estilo = sys.argv[5] if len(sys.argv) > 5 else "Conversacional"
 
     print("\n=== GLY-IA está generando la respuesta... ===\n")
 
     async def main():
-        salida, audits = await gly_ia(query, rol, temperatura, estilo)
+        salida, audits = await gly_ia(query, user_id, rol, temperatura, estilo)
         print("\n=== RESPUESTA DE GLY-IA ===\n")
         print(salida)
 

@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import logging
-import asyncio
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -32,12 +31,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Estado Global (opcional / simulación de sesión) ---
-historial_global = []
-
 # --- Entrada esperada desde el frontend ---
 class ConsultaInput(BaseModel):
     query: str
+    user_id: str  # ¡Este campo es obligatorio ahora!
     rol: str = "Auditor"
     temperatura: float = 0.7
     estilo: str = "Formal"
@@ -49,12 +46,13 @@ async def procesar_consulta(data: ConsultaInput):
         if not data.query.strip():
             raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
 
-        global historial_global
+        if not data.user_id.strip():
+            raise HTTPException(status_code=400, detail="El campo 'user_id' es obligatorio.")
 
         # Detectar trigger para generar propuesta técnica
         if data.query.strip().lower() == "generar auditoria":
-            logger.info("Generando auditoría...")
-            propuesta = generar_documento_consultivo()
+            logger.info(f"Generando auditoría para usuario {data.user_id}...")
+            propuesta = generar_documento_consultivo(data.user_id)
             logger.info("Auditoría generada exitosamente")
             return {
                 "respuesta": "Auditoría finalizada. Propuesta técnica generada.",
@@ -62,8 +60,9 @@ async def procesar_consulta(data: ConsultaInput):
             }
 
         # Caso normal: continuar conversación con GLY-IA
-        respuesta, historial_global = await gly_ia(
-            data.query,
+        respuesta, _ = await gly_ia(
+            query=data.query,
+            user_id=data.user_id,
             rol=data.rol,
             estilo=data.estilo,
             temperatura=data.temperatura
@@ -75,11 +74,13 @@ async def procesar_consulta(data: ConsultaInput):
         logger.error(f"Error interno en /gpt: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-# --- Endpoint adicional para generar propuesta manual ---
-@app.get("/propuesta-tecnica")
-async def generar_propuesta():
+# --- Endpoint adicional para generar propuesta técnica manual ---
+@app.get("/propuesta-tecnica/{user_id}")
+async def generar_propuesta(user_id: str):
     try:
-        propuesta = generar_documento_consultivo()
+        if not user_id.strip():
+            raise HTTPException(status_code=400, detail="El campo 'user_id' es obligatorio.")
+        propuesta = generar_documento_consultivo(user_id)
         return {"propuesta": propuesta}
     except Exception as e:
         logger.error(f"Error al generar propuesta: {str(e)}", exc_info=True)
