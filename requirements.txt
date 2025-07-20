@@ -1,12 +1,7 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-langchain==0.3.0
-langchain-groq==0.2.0
-openai==1.47.0
-python-dotenv==1.0.1
-supabase==2.17.0
-click==8.1.8  # Para resolver el conflicto con crewai-tools
-embedchain==0.1.114  # Para resolver el conflicto con crewai-tools
-crewai==0.105.0  # Para resolver el conflicto con crewai-tools
-typer==0.9.0  # Para resolver el conflicto con instructor
-httpx==0.27.2  # Para resolver el conflicto con litellm
+fastapi[all]
+uvicorn[standard]
+langchain
+langchain-groq
+openai
+python-dotenv
+supabase
