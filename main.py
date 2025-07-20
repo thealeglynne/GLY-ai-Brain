@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import logging
+import asyncio
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Estado Global (simulación temporal para sesiones) ---
+# --- Estado Global (opcional / simulación de sesión) ---
 historial_global = []
 
 # --- Entrada esperada desde el frontend ---
@@ -44,29 +45,28 @@ class ConsultaInput(BaseModel):
 # --- Endpoint principal del agente GLY-IA ---
 @app.post("/gpt")
 async def procesar_consulta(data: ConsultaInput):
-    if not data.query.strip():
-        raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
-
     try:
+        if not data.query.strip():
+            raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
+
         global historial_global
 
         # Detectar trigger para generar propuesta técnica
         if data.query.strip().lower() == "generar auditoria":
             logger.info("Generando auditoría...")
-            propuesta = generar_documento_consultivo()  # Corregido: usar generar_documento_consultivo
+            propuesta = generar_documento_consultivo()
             logger.info("Auditoría generada exitosamente")
             return {
-                "respuesta": "✅ Auditoría finalizada. Propuesta técnica generada.",
+                "respuesta": "Auditoría finalizada. Propuesta técnica generada.",
                 "propuesta": propuesta
             }
 
         # Caso normal: continuar conversación con GLY-IA
-        respuesta, historial_global = gly_ia(
+        respuesta, historial_global = await gly_ia(
             data.query,
             rol=data.rol,
             estilo=data.estilo,
-            temperatura=data.temperatura,
-            historial=historial_global
+            temperatura=data.temperatura
         )
 
         return {"respuesta": respuesta}
