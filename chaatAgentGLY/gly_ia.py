@@ -10,42 +10,7 @@ import groq
 # ===== Cargar entorno =====
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "https://zixyjbmaczqsitxubcbp.supabase.co")
-supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
-
 print(f"GROQ_API_KEY: {'Set' if api_key else 'Not set'}")
-print(f"Supabase URL: {supabase_url}")
-
-# ===== Inicializar cliente de Supabase =====
-from supabase import create_client, Client
-supabase: Client = create_client(supabase_url, supabase_key)
-
-# ===== Recuperar auditorías previas del usuario =====
-async def get_user_audits(user_id, max_turnos=5):
-    try:
-        response = await supabase \
-            .from_('auditorias') \
-            .select('audit_content') \
-            .eq('user_id', user_id) \
-            .order('created_at', desc=True) \
-            .limit(max_turnos) \
-            .execute()
-        
-        if response.data is None:
-            print(f"❌ No se encontraron auditorías para el usuario")
-            return []
-        
-        audits = []
-        for audit in response.data:
-            try:
-                audits.append(json.loads(audit['audit_content']))
-            except Exception:
-                continue
-
-        return audits
-    except Exception as e:
-        print(f"❌ Error al obtener auditorías: {str(e)}")
-        return []
 
 # ===== Generar instrucciones por rol y estilo =====
 def generar_instrucciones(rol, estilo):
@@ -57,7 +22,7 @@ def generar_instrucciones(rol, estilo):
 
     introducciones = {
         "Auditor": (
-            "Eres GLY-IA, un consultor experto en auditorías empresariales y transformación digital. Tu misión es recolectar información clave sobre los procesos, herramientas y desafíos del usuario para preparar una auditoría técnica. Usa el historial de auditorías previas del usuario para contextualizar tus respuestas. Haz preguntas específicas, una por respuesta, para entender su negocio y detectar ineficiencias. Mantén las respuestas breves (80-120 palabras), naturales y basadas en el contexto, evitando explicaciones largas o repeticiones. Propón escribir 'generar auditoria' cuando tengas suficiente información (por ejemplo, tras 3-4 interacciones relevantes). Tu objetivo es guiar al usuario hacia una auditoría sin abrumarlo, proponiendo soluciones basadas en IA solo cuando sea necesario."
+            "Eres GLY-IA, un consultor experto en auditorías empresariales y transformación digital. Tu misión es recolectar información clave sobre los procesos, herramientas y desafíos del usuario para preparar una auditoría técnica. Haz preguntas específicas, una por respuesta, para entender su negocio y detectar ineficiencias. Mantén las respuestas breves (80-120 palabras), naturales y basadas en el contexto, evitando explicaciones largas o repeticiones. Propón escribir 'generar auditoria' cuando tengas suficiente información (por ejemplo, tras 3-4 interacciones relevantes). Tu objetivo es guiar al usuario hacia una auditoría sin abrumarlo, proponiendo soluciones basadas en IA solo cuando sea necesario."
         ),
         "Desarrollador": "Eres un desarrollador senior con experiencia en arquitecturas modernas, microservicios e IA aplicada.",
         "Gestor de Negocios": "Eres un estratega empresarial que busca oportunidades de eficiencia y escalabilidad.",
@@ -66,52 +31,70 @@ def generar_instrucciones(rol, estilo):
 
     return f"{introducciones.get(rol, 'Eres un asistente de IA experto en empresas.')}\n{estilos.get(estilo, '')}"
 
-# ===== Construcción de contexto desde auditorías =====
-async def construir_contexto(user_id, max_turnos=5):
-    audits = await get_user_audits(user_id, max_turnos)
-    contexto = ""
-    for audit in audits:
-        user_input = audit.get('user_input', '')
-        ia_response = audit.get('ia_response', '')
-        if user_input and ia_response:
-            contexto += f"Usuario: {user_input}\nIA: {ia_response}\n"
+# ===== Construcción de historial para el prompt =====
+def construir_contexto(historial, max_turnos=5):
+    if len(historial) > max_turnos:
+        historial = historial[-max_turnos:]
+    contexto = "\n".join([
+        f"Usuario: {turno['user']}\nIA: {turno['ia']}" for turno in historial
+        if turno['user'].lower() != "iniciar conversación"
+    ])
     return contexto
 
-# ===== Evaluar si se puede generar auditoría =====
-def evaluar_completitud(audits):
-    criterios = ["proceso", "herramienta", "problema", "ineficiencia", "flujo"]
-    texto_completo = " ".join([audit.get('user_input', '').lower() for audit in audits])
-    return sum(criterio in texto_completo for criterio in criterios) >= 2 and len(audits) >= 3
+# ===== Evaluar si ya se puede generar auditoría =====
+def evaluar_completitud(historial):
+    criterios = [
+        "proceso", "herramienta", "problema", "ineficiencia", "flujo"
+    ]
+    texto_completo = " ".join([turno["user"].lower() for turno in historial])
+    return sum(criterio in texto_completo for criterio in criterios) >= 2 and len(historial) >= 3
+
+# ===== Guardar conversación en JSON =====
+def guardar_conversacion_json(historial, empresa="Desconocida", rol="Auditor", estilo="Conversacional"):
+    data = {
+        "empresa": empresa,
+        "rol": rol,
+        "estilo": estilo,
+        "fecha": datetime.now().isoformat(),
+        "conversacion": historial,
+        "ready_to_generate": evaluar_completitud(historial)
+    }
+
+    with open("conversacion_gly_ia.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
 # ===== Prompt Template =====
 prompt_template = PromptTemplate(
     input_variables=["instrucciones", "contexto", "input"],
     template=(
         "{instrucciones}\n\n"
-        "Contexto reciente de la conversación (basado en auditorías previas del usuario):\n{contexto}\n\n"
+        "Contexto reciente de la conversación:\n{contexto}\n\n"
         "Nueva pregunta del usuario: {input}\n\n"
-        "Responde de forma breve (80-120 palabras), clara y natural, como si hablaras con un colega. "
-        "Usa el contexto para continuar la conversación de forma lógica, sin repetir ideas. "
-        "Haz una sola pregunta clave para recolectar información sobre procesos, herramientas o desafíos. "
-        "Evita explicaciones largas o sugerencias prematuras de soluciones. "
-        "Si el contexto es suficiente, sugiere escribir 'generar auditoria' de forma breve. "
-        "No repitas la pregunta del usuario en la respuesta.\n\n"
+        "Responde de forma breve (80-120 palabras), clara y natural, como si hablaras con un colega. Usa el contexto para continuar la conversación de forma lógica, sin repetir ideas. Haz una sola pregunta clave para recolectar información sobre procesos, herramientas o desafíos. Evita explicaciones largas o sugerencias prematuras de soluciones. Si el contexto es suficiente, sugiere escribir 'generar auditoria' de forma breve. No repitas la pregunta del usuario en la respuesta.\n\n"
         "Respuesta de GLY-IA:"
     )
 )
 
-# ===== Función principal del agente =====
-async def gly_ia(query, user_id, rol="Auditor", temperatura=0.7, estilo="Conversacional"):
+# ===== Llamada principal del agente =====
+def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", historial=None):
     try:
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
-        if not user_id:
-            return "❌ No se recibió un user_id válido.", []
+        if historial is None:
+            historial = []
 
-        audits = await get_user_audits(user_id)
+        # Manejar el query inicial
+        if query.lower() == "iniciar conversación":
+            respuesta = (
+                "¡Hola! Soy GLY-IA, tu asistente para auditar procesos con IA. 😊 Quiero entender tu negocio. ¿A qué se dedica tu empresa?"
+            )
+            historial.append({"user": query, "ia": respuesta})
+            guardar_conversacion_json(historial, rol=rol, estilo=estilo)
+            return respuesta, historial
+
         instrucciones = generar_instrucciones(rol, estilo)
-        contexto = await construir_contexto(user_id)
+        contexto = construir_contexto(historial)
 
         prompt = prompt_template.format(
             instrucciones=instrucciones,
@@ -123,45 +106,47 @@ async def gly_ia(query, user_id, rol="Auditor", temperatura=0.7, estilo="Convers
             model_name="llama3-70b-8192",
             api_key=api_key,
             temperature=float(temperatura),
-            max_tokens=150
+            max_tokens=150  # Reducido para respuestas más cortas
         )
 
         respuesta = llm.invoke(prompt)
         texto = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
 
-        if evaluar_completitud(audits) and "generar auditoria" not in query.lower():
+        # === Agregar sugerencia de auditoría si el contexto es suficiente ===
+        if evaluar_completitud(historial) and "generar auditoria" not in query.lower():
             texto += "\n\nParece que tenemos suficiente info. ¿Listo para el informe técnico? Escribe 'generar auditoria'."
 
-        return texto, audits
+        historial.append({"user": query, "ia": texto})
+
+        # === Guardar conversación en JSON ===
+        guardar_conversacion_json(historial, rol=rol, estilo=estilo)
+
+        return texto, historial
 
     except groq.APIConnectionError as e:
-        return f"❌ Error de conexión con Groq: {str(e)}", []
+        return f"❌ Error de conexión con Groq: {str(e)}", historial
     except groq.RateLimitError as e:
-        return f"❌ Límite de la API alcanzado: {str(e)}", []
+        return f"❌ Límite de la API alcanzado: {str(e)}", historial
     except groq.AuthenticationError as e:
-        return f"❌ Error de autenticación: Clave de API inválida - {str(e)}", []
+        return f"❌ Error de autenticación: Clave de API inválida - {str(e)}", historial
     except Exception as e:
-        return f"❌ Error inesperado: {str(e)}", []
+        return f"❌ Error inesperado: {str(e)}", historial
 
 # ===== CLI para pruebas rápidas =====
 if __name__ == "__main__":
-    import asyncio
-
-    if len(sys.argv) < 3:
-        print("Uso: python gly_ia.py '{query}' '{user_id}' '{rol}' '{temperatura}' '{estilo}'")
+    if len(sys.argv) < 2:
+        print("Uso: python gly_ia.py '{query}' '{rol}' '{temperatura}' '{estilo}'")
         sys.exit(1)
 
     query = sys.argv[1]
-    user_id = sys.argv[2]
-    rol = sys.argv[3] if len(sys.argv) > 3 else "Auditor"
-    temperatura = sys.argv[4] if len(sys.argv) > 4 else 0.7
-    estilo = sys.argv[5] if len(sys.argv) > 5 else "Conversacional"
+    rol = sys.argv[2] if len(sys.argv) > 2 else "Auditor"
+    temperatura = sys.argv[3] if len(sys.argv) > 3 else 0.7
+    estilo = sys.argv[4] if len(sys.argv) > 4 else "Conversacional"
 
     print("\n=== GLY-IA está generando la respuesta... ===\n")
 
-    async def main():
-        salida, audits = await gly_ia(query, user_id, rol, temperatura, estilo)
-        print("\n=== RESPUESTA DE GLY-IA ===\n")
-        print(salida)
+    historial_chat = []
+    salida, historial_chat = gly_ia(query, rol, temperatura, estilo, historial=historial_chat)
 
-    asyncio.run(main())
+    print("\n=== RESPUESTA DE GLY-IA ===\n")
+    print(salida)

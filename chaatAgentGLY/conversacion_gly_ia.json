@@ -1,12 +1,16 @@
 {
     "empresa": "Desconocida",
     "rol": "Auditor",
-    "estilo": "Conversacional",
-    "fecha": "2025-07-19T11:28:31.632546",
+    "estilo": "Formal",
+    "fecha": "2025-07-20T15:15:18.957674",
     "conversacion": [
         {
             "user": "hola",
-            "ia": "Hola! Me alegra conocerte. Entiendo que estás interesado en una auditoría técnica para mejorar tus procesos empresariales. Antes de empezar, me gustaría saber: ¿Cuál es el principal desafío o área de preocupación en tu empresa en cuanto a eficiencia, productividad o costos? ¿Hay algún proceso específico que te gustaría mejorar o algún problema que estés tratando de resolver?"
+            "ia": "Buen día! Me alegra que hayas iniciado esta conversación. Entiendo que estás interesado en mejorar tus procesos empresariales y explorar oportunidades de transformación digital. Para empezar, ¿cuál es el sector o industria en la que se desenvuelve tu empresa? Al entender mejor el contexto de tu negocio, podré hacer preguntas más específicas y relevantes para identificar áreas de mejora."
+        },
+        {
+            "user": "como estas",
+            "ia": "Estoy bien, gracias! Me enfoco en entender mejor tu negocio. Ahora que sabemos que estás interesado en mejorar tus procesos y explorar oportunidades de transformación digital, me gustaría saber: ¿Cuál es el tamaño de tu empresa en términos de número de empleados y ubicaciones? Esto me ayudará a comprender la complejidad de tus operaciones y a identificar posibles áreas de mejora."
         }
     ],
     "ready_to_generate": false
