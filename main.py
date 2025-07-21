@@ -84,8 +84,12 @@ async def generar_propuesta():
 async def health_check():
     return {"status": "ok", "message": "GLY-IA API is running"}
 
-# --- Ejecución local ---
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        app,                      # Tu aplicación FastAPI
+        host="0.0.0.0",           # Escucha en todas las interfaces de red
+        port=int(os.getenv("PORT", 8000)),  # Puerto desde variable de entorno o 8000
+        workers=1,                # Solo 1 proceso worker
+        limit_concurrency=100,    # Máximo 100 conexiones simultáneas
+        timeout_keep_alive=5      # Cierra conexiones inactivas después de 5 segundos
+    )
