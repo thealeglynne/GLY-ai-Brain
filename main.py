@@ -48,7 +48,7 @@ async def procesar_consulta(data: ConsultaInput):
 
         # Detectar trigger para generar propuesta técnica
         if data.query.strip().lower() == "generar auditoria":
-            propuesta = generar_propuesta_tecnica()
+            propuesta = generar_documento_consultivo()
             return {
                 "respuesta": "✅ Auditoría finalizada. Propuesta técnica generada.",
                 "propuesta": propuesta
