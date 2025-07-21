@@ -19,11 +19,11 @@ def cargar_conversacion():
         with open("conversacion_gly_ia.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"❌ Error al cargar el JSON de conversación: {e}")
+        print(f"❌ Error al cargar el JSON de conversación: {e}") 
         return None
 
 # ===== Instrucción para el generador técnico-consultivo =====
-def generar_instrucciones_especializadas():
+def generar_documento_consultivo():
     return (
         "Actúas como un consultor senior de automatización de procesos y transformación digital en GLYNNE. "
         "Tu función es analizar a fondo el caso del cliente, contenido en el archivo JSON, y elaborar un documento consultivo de alto nivel. "
@@ -54,7 +54,7 @@ def generar_documento_consultivo():
         if not data:
             return "❌ No se pudo cargar el archivo JSON de conversación."
 
-        instrucciones = generar_instrucciones_especializadas()
+        instrucciones = generar_documento_consultivo()
         contenido_json = json.dumps(data, indent=2, ensure_ascii=False)
 
         prompt = prompt_template.format(
