@@ -2,11 +2,15 @@
     "empresa": "Desconocida",
     "rol": "Auditor",
     "estilo": "Formal",
-    "fecha": "2025-07-20T17:37:42.002722",
+    "fecha": "2025-07-21T09:04:40.752976",
     "conversacion": [
         {
             "user": "hola",
-            "ia": "Hola! Me alegra hablar contigo. Entiendo que estás interesado en una auditoría técnica para tu empresa. Empecemos por el principio. ¿Cuál es el objetivo principal que deseas lograr con esta auditoría? ¿Estás buscando mejorar la eficiencia, reducir costos o identificar oportunidades de crecimiento? Al entender mejor tus necesidades, puedo ayudarte a enfocar nuestra conversación y obtener los resultados que necesitas."
+            "ia": "Hola! Me alegra trabajar contigo para identificar oportunidades de mejora en tu empresa. Antes de comenzar, ¿podrías decirme un poco sobre tu empresa y qué te motiva a buscar una auditoría técnica en este momento? ¿Estás experimentando algún desafío específico o simplemente deseas asegurarte de que tus procesos y herramientas estén alineados con tus objetivos empresariales?"
+        },
+        {
+            "user": "generar auditoria",
+            "ia": "Entiendo que estás listo para avanzar. Antes de generar la auditoría, me gustaría saber más sobre tus procesos actuales. ¿Cuál es el departamento o área de tu empresa que consideras más crítico para el éxito de tu negocio? ¿Es ventas, marketing, finanzas, producción o algún otro? Al entender mejor las áreas clave, puedo enfocar la auditoría en las oportunidades de mejora más relevantes para ti."
         }
     ],
     "ready_to_generate": false
