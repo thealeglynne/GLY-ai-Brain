@@ -23,7 +23,7 @@ def cargar_conversacion():
         return None
 
 # ===== Instrucción para el generador técnico-consultivo =====
-def generar_documento_consultivo():
+def generar_instrucciones_especializadas():
     return (
         "Actúas como un consultor senior de automatización de procesos y transformación digital en GLYNNE. "
         "Tu función es analizar a fondo el caso del cliente, contenido en el archivo JSON, y elaborar un documento consultivo de alto nivel. "
@@ -54,7 +54,7 @@ def generar_documento_consultivo():
         if not data:
             return "❌ No se pudo cargar el archivo JSON de conversación."
 
-        instrucciones = generar_documento_consultivo()
+        instrucciones = generar_instrucciones_especializadas()
         contenido_json = json.dumps(data, indent=2, ensure_ascii=False)
 
         prompt = prompt_template.format(
@@ -66,7 +66,7 @@ def generar_documento_consultivo():
             model_name="llama3-70b-8192",
             api_key=api_key,
             temperature=0.5,
-            max_tokens=2000
+            max_tokens=4000
         )
 
         respuesta = llm.invoke(prompt)
