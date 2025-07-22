@@ -49,7 +49,7 @@ def evaluar_completitud(historial):
     texto_completo = " ".join([turno["user"].lower() for turno in historial])
     return sum(criterio in texto_completo for criterio in criterios) >= 2 and len(historial) >= 3
 
-# ===== Guardar conversación en JSON =====
+# ===== Guardar conversación en JSON (solo para depuración) =====
 def guardar_conversacion_json(historial, empresa="Desconocida", rol="Auditor", estilo="Conversacional"):
     data = {
         "empresa": empresa,
@@ -81,17 +81,20 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", histo
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
+        # Inicializar historial vacío si no se proporciona
         if historial is None:
             historial = []
 
-        # Manejar el query inicial
+        # Reiniciar la conversación si es una nueva sesión
         if query.lower() == "iniciar conversación":
             respuesta = (
                 "¡Hola! Soy GLY-IA, tu asistente para auditar procesos con IA. 😊 Quiero entender tu negocio. ¿A qué se dedica tu empresa?"
             )
-            historial.append({"user": query, "ia": respuesta})
-            guardar_conversacion_json(historial, rol=rol, estilo=estilo)
-            return respuesta, historial
+            return respuesta, [{"user": query, "ia": respuesta}]
+
+        # Manejar el comando para generar auditoría
+        if query.strip().lower() == "generar auditoria":
+            return "✅ Auditoría finalizada. Propuesta técnica generada.", []
 
         instrucciones = generar_instrucciones(rol, estilo)
         contexto = construir_contexto(historial)
@@ -112,16 +115,17 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", histo
         respuesta = llm.invoke(prompt)
         texto = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
 
-        # === Agregar sugerencia de auditoría si el contexto es suficiente ===
+        # Agregar sugerencia de auditoría si el contexto es suficiente
         if evaluar_completitud(historial) and "generar auditoria" not in query.lower():
             texto += "\n\nParece que tenemos suficiente info. ¿Listo para el informe técnico? Escribe 'generar auditoria'."
 
-        historial.append({"user": query, "ia": texto})
+        # Actualizar historial solo para esta sesión
+        nuevo_historial = historial + [{"user": query, "ia": texto}]
 
-        # === Guardar conversación en JSON ===
-        guardar_conversacion_json(historial, rol=rol, estilo=estilo)
+        # Guardar conversación solo para depuración (opcional)
+        guardar_conversacion_json(nuevo_historial, rol=rol, estilo=estilo)
 
-        return texto, historial
+        return texto, nuevo_historial
 
     except groq.APIConnectionError as e:
         return f"❌ Error de conexión con Groq: {str(e)}", historial
@@ -145,8 +149,11 @@ if __name__ == "__main__":
 
     print("\n=== GLY-IA está generando la respuesta... ===\n")
 
-    historial_chat = []
-    salida, historial_chat = gly_ia(query, rol, temperatura, estilo, historial=historial_chat)
+    # Para pruebas CLI, mantenemos un historial simple en memoria
+    if not hasattr(gly_ia, 'historial_cli'):
+        gly_ia.historial_cli = []
+
+    salida, gly_ia.historial_cli = gly_ia(query, rol, temperatura, estilo, historial=gly_ia.historial_cli)
 
     print("\n=== RESPUESTA DE GLY-IA ===\n")
     print(salida)
