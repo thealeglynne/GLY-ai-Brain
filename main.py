@@ -7,7 +7,6 @@ import os
 try:
     from chaatAgentGLY.gly_ia import gly_ia
     from chaatAgentGLY.gly_dev import generar_documento_consultivo
-
 except ImportError as e:
     print("❌ Error al importar agentes:", e)
     raise
@@ -42,6 +41,12 @@ class ConsultaInput(BaseModel):
 async def procesar_consulta(data: ConsultaInput):
     if not data.query.strip():
         raise HTTPException(status_code=400, detail="El campo 'query' no puede estar vacío.")
+    
+    if len(data.query) > 300:
+        raise HTTPException(
+            status_code=400,
+            detail="La consulta excede 300 caracteres. Por favor sé más breve."
+        )
 
     try:
         global historial_global
@@ -74,18 +79,46 @@ async def procesar_consulta(data: ConsultaInput):
 async def generar_propuesta():
     try:
         propuesta = generar_documento_consultivo()
-
         return {"propuesta": propuesta}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar propuesta: {str(e)}")
+
+# --- Nuevo endpoint para monitoreo ---
+@app.post("/estado-tokens")
+async def estado_tokens():
+    """Devuelve el estado actual del uso de tokens"""
+    return {
+        "limites": {
+            "conversacion": {
+                "max_tokens": 120,
+                "max_historial": 3,
+                "max_query_chars": 300
+            },
+            "documentos": {
+                "max_tokens": 3500,
+                "max_input_chars": 10000
+            }
+        },
+        "recomendaciones": [
+            "Mantener conversaciones bajo 4 intercambios",
+            "Usar 'generar auditoria' para reiniciar el historial",
+            "Documentos muy largos dividirlos en partes"
+        ]
+    }
 
 # --- Endpoint de salud ---
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "GLY-IA API is running"}
 
-# --- Ejecución local ---
+# --- Configuración del servidor ---
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        workers=1,
+        limit_concurrency=100,
+        timeout_keep_alive=5
+    )

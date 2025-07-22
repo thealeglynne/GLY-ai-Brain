@@ -44,7 +44,6 @@ prompt_template = PromptTemplate(
     )
 )
 
-# ===== Agente generador =====
 def generar_documento_consultivo():
     try:
         if not api_key:
@@ -55,18 +54,22 @@ def generar_documento_consultivo():
             return "❌ No se pudo cargar el archivo JSON de conversación."
 
         instrucciones = generar_instrucciones_especializadas()
-        contenido_json = json.dumps(data, indent=2, ensure_ascii=False)
+
+        # --- NUEVO: Acortar contenido JSON si es muy extenso ---
+        contenido_json = json.dumps(data, ensure_ascii=False)[:10000]  # Máx 10k caracteres
 
         prompt = prompt_template.format(
             instrucciones=instrucciones,
             contenido_json=contenido_json
         )
 
+        # --- NUEVO: Ajustes para documentos largos ---
         llm = ChatGroq(
             model_name="llama3-70b-8192",
             api_key=api_key,
             temperature=0.5,
-            max_tokens=4000
+            max_tokens=3500,  # Reducido para evitar error 413
+            request_timeout=30  # Más tiempo para prompts largos
         )
 
         respuesta = llm.invoke(prompt)
@@ -74,6 +77,7 @@ def generar_documento_consultivo():
 
     except Exception as e:
         return f"❌ Error inesperado: {str(e)}"
+
 
 # ===== CLI de prueba =====
 if __name__ == "__main__":
