@@ -75,21 +75,15 @@ prompt_template = PromptTemplate(
     )
 )
 
+# ===== Llamada principal del agente =====
 def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", historial=None):
     try:
         if not api_key:
             raise ValueError("GROQ_API_KEY no está configurada")
 
-        # --- Inicio: Optimización de tokens ---
-        # Limitar longitud de la consulta
-        query = query[:400]  # Máximo 400 caracteres por mensaje
-        
-        # Limitar historial a los últimos 3 intercambios (reduce tokens)
-        historial = historial[-3:] if historial else []
-        
-        # Acortar instrucciones para ahorrar tokens
-        instrucciones = generar_instrucciones(rol, estilo)[:600]  # Máx 600 caracteres
-        # --- Fin: Optimización de tokens ---
+        # Inicializar historial vacío si no se proporciona
+        if historial is None:
+            historial = []
 
         # Reiniciar la conversación si es una nueva sesión
         if query.lower() == "iniciar conversación":
@@ -102,54 +96,46 @@ def gly_ia(query, rol="Auditor", temperatura=0.7, estilo="Conversacional", histo
         if query.strip().lower() == "generar auditoria":
             return "✅ Auditoría finalizada. Propuesta técnica generada.", []
 
-        # Construir contexto optimizado (limitar longitud)
-        contexto = "\n".join([
-            f"U: {turno['user'][:150]}\nIA: {turno['ia'][:150]}"  # Limitar a 150 chars por turno
-            for turno in historial
-            if turno['user'].lower() != "iniciar conversación"
-        ])
+        instrucciones = generar_instrucciones(rol, estilo)
+        contexto = construir_contexto(historial)
 
         prompt = prompt_template.format(
             instrucciones=instrucciones,
             contexto=contexto,
-            input=query[:500]  # Limitar input del usuario
+            input=query
         )
 
-        # Configuración optimizada de Groq
         llm = ChatGroq(
             model_name="llama3-70b-8192",
             api_key=api_key,
             temperature=float(temperatura),
-            max_tokens=180,  # Aumentado ligeramente a 180 tokens
-            request_timeout=12  # Timeout de 12 segundos
+            max_tokens=150  # Reducido para respuestas más cortas
         )
 
         respuesta = llm.invoke(prompt)
-        texto = respuesta.content[:400] if hasattr(respuesta, "content") else str(respuesta)[:400]
+        texto = respuesta.content if hasattr(respuesta, "content") else str(respuesta)
 
         # Agregar sugerencia de auditoría si el contexto es suficiente
         if evaluar_completitud(historial) and "generar auditoria" not in query.lower():
-            texto += "\n\n[¿Listo para generar el informe técnico? Escribe 'generar auditoria']"
+            texto += "\n\nParece que tenemos suficiente info. ¿Listo para el informe técnico? Escribe 'generar auditoria'."
 
-        # Actualizar historial (manteniendo máximo 4 intercambios)
-        nuevo_historial = (historial + [{"user": query[:300], "ia": texto}])[-4:]
-        
-        # Guardar conversación (opcional para depuración)
+        # Actualizar historial solo para esta sesión
+        nuevo_historial = historial + [{"user": query, "ia": texto}]
+
+        # Guardar conversación solo para depuración (opcional)
         guardar_conversacion_json(nuevo_historial, rol=rol, estilo=estilo)
 
         return texto, nuevo_historial
 
     except groq.APIConnectionError as e:
-        return "🔌 Error de conexión. Por favor intenta nuevamente.", historial
+        return f"❌ Error de conexión con Groq: {str(e)}", historial
     except groq.RateLimitError as e:
-        return "⚠️ Límite temporal de la API. Espera 1 minuto.", historial
-    except groq.APIError as e:
-        if e.code == 503:
-            return "⏳ Servicio ocupado. Intenta nuevamente en breve.", historial
-        return f"❌ Error en la API: {str(e)[:200]}", historial
+        return f"❌ Límite de la API alcanzado: {str(e)}", historial
+    except groq.AuthenticationError as e:
+        return f"❌ Error de autenticación: Clave de API inválida - {str(e)}", historial
     except Exception as e:
-        return f"⚠️ Error: {str(e)[:200]}", historial
-    
+        return f"❌ Error inesperado: {str(e)}", historial
+
 # ===== CLI para pruebas rápidas =====
 if __name__ == "__main__":
     if len(sys.argv) < 2:
