@@ -19,7 +19,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "glynne-sst-ai-hsiy.vercel.app",
+        "https://glynne-sst-ai-hsiy.vercel.app",
         "http://localhost:3000"
     ],
     allow_credentials=True,
